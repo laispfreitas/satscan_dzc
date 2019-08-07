@@ -1,0 +1,146 @@
+### This is 
+
+### To identify space-time clusters of Zika, Chikungunya and Dengue using SaTScan
+
+# Packages needed
+library(rsatscan)
+library(sf)
+
+# Load the cases and populations data. We don't have permission to reproduce the data,   
+# but the data can be found at:
+# http://www.rio.rj.gov.br/web/sms/exibeConteudo?id=6525201
+cases <- read_csv('DZC_cases_pop.csv')
+
+# Let's consider cases dataframe as containing the following columns:
+# names(cases)
+# [1] "Cod_Neigh"  "Neigh_name"  "time"  "dengue"  "chikungunya"  "zika"  "population"
+
+# Load centroids of the neighbourhoods (our spatial unit analysis)
+neigh <- read_sf('realcentroides_bairros.shp')
+
+# neigh dataframe must contain the longitude (X) and latitude (Y) coordinates of the centroids of
+# each neighbourhood, as well as the same identification for the neighbourhoods than the case dataframe
+# names(neigh)
+# [1] "Cod_Neigh"  "Neigh_name"  "X"  "Y"
+
+tmp <- tempdir()
+old <- getwd()
+setwd(tmp)
+
+# SaTSCan must be installed, it can be downloaded at:
+# https://www.satscan.org/download.html 
+
+# Load SaTScan
+ss.local <- "~/bin/SaTScan/" # change location accordingly 
+
+# Load the parameters for SaTScan
+ssenv$.ss.params <- readLines('template_satscan.txt')
+
+
+#############################################################################
+
+# The following lines corresponds to SaTScan analysis for one disease
+# It was done for zika, chikungunya, and dengue, individually, by changing to the corresponding row number 
+
+### Creating files required to run SaTSCan
+
+DISEASE <- 6 #row number of the cases     
+ARQ <- 'zika.cas' #change name for dengue.cas and chikungunya.cas accordingly 
+
+# Case files
+write.table(cases[,c(1,DISEASE,8)],file=ARQ , 
+            row.names = FALSE,col.names = FALSE,qmethod = "double",fileEncoding = "latin1")
+
+# Population files
+write.table(cases[,c(1,8,7)],file='dzc.pop' , 
+            row.names = FALSE,col.names = FALSE,qmethod = "double",fileEncoding = "latin1")
+
+# Coordinates files
+write.table(neigh[,c(1,4,3)],file='dzc.geo' , 
+            row.names = FALSE,col.names = FALSE,qmethod = "double",fileEncoding = "latin1")
+
+## Running SaTScan
+
+ss.options(list(CaseFile=ARQ,
+                StartDate="2015/08/02",
+                EndDate="2016/12/25", 
+                PrecisionCaseTimes=3 ,      
+                PopulationFile="dzc.pop",
+                CoordinatesFile="dzc.geo", 
+                CoordinatesType=1,          
+                AnalysisType=3,
+                ModelType=0,
+                TimeAggregationUnits=3,
+                ScanAreas=1,
+                TimeAggregationLength=7,
+                MaxSpatialSizeInPopulationAtRisk=50,
+                MinimumTemporalClusterSize=1,
+                MaxTemporalSize=31,
+                MinimumCasesInHighRateClusters=5,
+                MaxSpatialSizeInPopulationAtRisk_Reported=5  
+))
+
+ss.options(c("NonCompactnessPenalty=0", "ReportGiniClusters=n", "LogRunToHistoryFile=n"))
+
+modelo <- paste0(ARQ,'_modelo')
+write.ss.prm(tmp,modelo)
+result_zika <-  satscan(tmp,modelo, sslocation="/bin/SaTScan/")
+summary(result_zika)
+result_zika
+
+
+############################################################################
+
+## Runing SaTScan for Multiple data sets analysis (Dengue, Zika, and Chikungunya simultaneously)
+
+# Load parameters for multiple datasets
+ssenv$.ss.params <- readLines('multiple_datasets.txt') 
+
+ARQ <- 'dengue.cas'
+ARQ2 <- 'zika.cas'
+ARQ3 <- 'chikungunya.cas'
+
+write.table(cases[,c(1,4,8)],file=ARQ , 
+            row.names = FALSE,col.names = FALSE,qmethod = "double",fileEncoding = "latin1")
+write.table(cases[,c(1,6,8)],file=ARQ2 , 
+            row.names = FALSE,col.names = FALSE,qmethod = "double",fileEncoding = "latin1")
+write.table(cases[,c(1,5,8)],file=ARQ3 , 
+            row.names = FALSE,col.names = FALSE,qmethod = "double",fileEncoding = "latin1")
+
+write.table(cases[,c(1,8,7)],file='dzc.pop' , 
+            row.names = FALSE,col.names = FALSE,qmethod = "double",fileEncoding = "latin1")
+
+write.table(neigh[,c(1,4,3)],file='dzc.geo' , 
+            row.names = FALSE,col.names = FALSE,qmethod = "double",fileEncoding = "latin1")
+
+ss.options(list(CaseFile=ARQ,
+                StartDate="2015/08/02",
+                EndDate="2016/12/25", 
+                PrecisionCaseTimes=3 ,      
+                PopulationFile="dzc.pop",
+                CoordinatesFile="dzc.geo", 
+                CoordinatesType=1,          
+                AnalysisType=3,
+                ModelType=0,
+                TimeAggregationUnits=3,
+                ScanAreas=1,
+                TimeAggregationLength=7,
+                MaxSpatialSizeInPopulationAtRisk=50,
+                MinimumTemporalClusterSize=1,
+                MaxTemporalSize=31,
+                MinimumCasesInHighRateClusters=5,
+                MaxSpatialSizeInPopulationAtRisk_Reported=5, 
+                MultipleDataSetsPurposeType=0,
+                CaseFile2=ARQ2,
+                PopulationFile2='dzc.pop',
+                CaseFile3=ARQ3,
+                PopulationFile3='dzc.pop'
+))
+
+ss.options(c("NonCompactnessPenalty=0", "ReportGiniClusters=n", "LogRunToHistoryFile=n"))
+
+model <- paste0(ARQ, '_Modelo')
+write.ss.prm(tmp,model)
+result_dzc <-  satscan(tmp,model, sslocation="/bin/SaTScan/")
+summary(result_dzc)
+result_dzc
